@@ -41,6 +41,9 @@
                     <img id="userAvatar" src="" alt="Avatar" class="w-7 h-7 rounded-full border border-white/50">
                     <span id="userName" class="text-sm font-medium max-w-[120px] sm:max-w-[200px] truncate">ユーザー名</span>
                 </div>
+                <button id="configBtn" class="bg-indigo-700 hover:bg-indigo-800 text-xs sm:text-sm text-indigo-100 px-3 py-1.5 rounded-lg transition-colors flex items-center space-x-1 border border-indigo-500/30" title="Firebase設定">
+                    <i class="fa-solid fa-gear"></i>
+                </button>
                 <button id="logoutBtn" class="bg-indigo-700 hover:bg-indigo-800 text-xs sm:text-sm text-indigo-100 px-3 py-1.5 rounded-lg transition-colors flex items-center space-x-1 border border-indigo-500/30">
                     <i class="fa-solid fa-right-from-bracket"></i>
                     <span class="hidden sm:inline">ログアウト</span>
@@ -48,6 +51,49 @@
             </div>
         </div>
     </header>
+
+    <!-- Firebase設定モーダルダイアログ (API Key エラー防止用) -->
+    <div id="configModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+        <div class="glass-card max-w-lg w-full p-6 rounded-2xl shadow-2xl bg-white border border-slate-200">
+            <div class="flex items-center space-x-3 mb-4 pb-3 border-b border-slate-100">
+                <div class="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                    <i class="fa-solid fa-key text-lg"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-900">Firebase 設定の登録</h3>
+                    <p class="text-xs text-slate-500">Firebase Consoleのプロジェクト設定値を貼り付けてください</p>
+                </div>
+            </div>
+            
+            <p class="text-xs text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200 mb-4">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i>
+                現在有効な Firebase API Key がセットされていません。Firebase Console で取得した <code class="bg-amber-100 px-1 rounded">firebaseConfig</code> を以下に入力してください。
+            </p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">API Key <span class="text-rose-500">*</span></label>
+                    <input type="text" id="cfgApiKey" placeholder="AIzaSy..." class="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-lg">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Auth Domain <span class="text-rose-500">*</span></label>
+                        <input type="text" id="cfgAuthDomain" placeholder="xxx.firebaseapp.com" class="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-lg">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-700 mb-1">Project ID <span class="text-rose-500">*</span></label>
+                        <input type="text" id="cfgProjectId" placeholder="xxx-project" class="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-lg">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-end space-x-2">
+                <button id="saveConfigBtn" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold px-4 py-2.5 rounded-xl shadow transition-all">
+                    設定を保存して接続
+                </button>
+            </div>
+        </div>
+    </div>
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-grow">
 
@@ -69,7 +115,11 @@
                     </svg>
                     <span>Googleアカウントでログイン</span>
                 </button>
-                <p class="text-xs text-slate-400 mt-6">※記録機能の利用にはログインが必要です</p>
+                
+                <button id="openConfigLink" class="mt-4 text-xs text-indigo-600 hover:underline flex items-center justify-center mx-auto space-x-1">
+                    <i class="fa-solid fa-gear"></i>
+                    <span>Firebase設定を変更する</span>
+                </button>
             </div>
         </div>
 
@@ -269,24 +319,109 @@
             serverTimestamp 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Global variables provided by runtime context or default fallback
+        // Global variables provided by runtime context or localStorage fallback
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'clubapp-default';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' 
-            ? JSON.parse(__firebase_config) 
-            : {
-                // ↓↓↓ ここをご自身の Firebase プロジェクトの設定値に置き換えてください ↓↓↓
+        
+        function getFirebaseConfig() {
+            const savedConfig = localStorage.getItem('clubapp_firebase_config');
+            if (savedConfig) {
+                try { return JSON.parse(savedConfig); } catch (e) {}
+            }
+
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try {
+                    const cfg = JSON.parse(__firebase_config);
+                    if (cfg.apiKey && !cfg.apiKey.includes('Placeholder')) return cfg;
+                } catch(e) {}
+            }
+
+            return {
                 apiKey: "YOUR_ACTUAL_API_KEY",
                 authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-                projectId: "YOUR_PROJECT_ID",
-                storageBucket: "YOUR_PROJECT_ID.appspot.com",
-                messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-                appId: "YOUR_APP_ID"
-                // ↑↑↑ ここまで ↑↑↑
+                projectId: "YOUR_PROJECT_ID"
             };
+        }
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
+        let firebaseConfig = getFirebaseConfig();
+        let app, auth, db;
+
+        const configModal = document.getElementById('configModal');
+        const saveConfigBtn = document.getElementById('saveConfigBtn');
+        const openConfigLink = document.getElementById('openConfigLink');
+        const configBtn = document.getElementById('configBtn');
+
+        function isDummyKey(key) {
+            return !key || key.includes('Placeholder') || key.includes('YOUR_ACTUAL');
+        }
+
+        function checkApiKeyValid() {
+            if (isDummyKey(firebaseConfig.apiKey)) {
+                configModal.classList.remove('hidden');
+                return false;
+            }
+            return true;
+        }
+
+        function initFirebase() {
+            if (isDummyKey(firebaseConfig.apiKey)) return;
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                // Listen for Authentication state changes
+                onAuthStateChanged(auth, (user) => {
+                    currentUser = user;
+                    if (user) {
+                        loginView.classList.add('hidden');
+                        appDashboard.classList.remove('hidden');
+                        userInfoHeader.classList.remove('hidden');
+                        
+                        userName.textContent = user.displayName || user.email || "ユーザー";
+                        userAvatar.src = user.photoURL || `https://placehold.co/100x100/6366f1/ffffff?text=${encodeURIComponent((user.displayName || 'U').charAt(0))}`;
+
+                        subscribeToRecords();
+                    } else {
+                        loginView.classList.remove('hidden');
+                        appDashboard.classList.add('hidden');
+                        userInfoHeader.classList.add('hidden');
+                        
+                        if (unsubscribeSnapshot) {
+                            unsubscribeSnapshot();
+                            unsubscribeSnapshot = null;
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error("Firebase init error:", e);
+                configModal.classList.remove('hidden');
+            }
+        }
+
+        saveConfigBtn.addEventListener('click', () => {
+            const apiKey = document.getElementById('cfgApiKey').value.trim();
+            const authDomain = document.getElementById('cfgAuthDomain').value.trim();
+            const projectId = document.getElementById('cfgProjectId').value.trim();
+
+            if (!apiKey || !authDomain || !projectId) {
+                alert("全ての項目を入力してください。");
+                return;
+            }
+
+            const newCfg = { apiKey, authDomain, projectId };
+            localStorage.setItem('clubapp_firebase_config', JSON.stringify(newCfg));
+            firebaseConfig = newCfg;
+            configModal.classList.add('hidden');
+            
+            location.reload();
+        });
+
+        openConfigLink.addEventListener('click', () => configModal.classList.remove('hidden'));
+        if (configBtn) configBtn.addEventListener('click', () => configModal.classList.remove('hidden'));
+
+        // Check and Initialize
+        checkApiKeyValid();
+        initFirebase();
 
         let currentUser = null;
         let unsubscribeSnapshot = null;
@@ -320,65 +455,28 @@
         // Set Default Date to Today
         activityDateInput.value = new Date().toISOString().split('T')[0];
 
-        // Auto Authenticate or check state
-        async function initAuth() {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } catch (e) {
-                    console.log("Custom token auth fallback", e);
-                }
-            }
-        }
-        initAuth();
-
-        // Listen for Authentication state changes
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-            if (user) {
-                // Logged in UI
-                loginView.classList.add('hidden');
-                appDashboard.classList.remove('hidden');
-                userInfoHeader.classList.remove('hidden');
-                
-                userName.textContent = user.displayName || user.email || "ユーザー";
-                userAvatar.src = user.photoURL || `https://placehold.co/100x100/6366f1/ffffff?text=${encodeURIComponent((user.displayName || 'U').charAt(0))}`;
-
-                // Fetch Records from Firestore
-                subscribeToRecords();
-            } else {
-                // Logged out UI
-                loginView.classList.remove('hidden');
-                appDashboard.classList.add('hidden');
-                userInfoHeader.classList.add('hidden');
-                
-                if (unsubscribeSnapshot) {
-                    unsubscribeSnapshot();
-                    unsubscribeSnapshot = null;
-                }
-            }
-        });
-
         // Google Login Action
         googleLoginBtn.addEventListener('click', async () => {
+            if (!checkApiKeyValid()) return;
+
             const provider = new GoogleAuthProvider();
             try {
                 await signInWithPopup(auth, provider);
                 showToast("Googleアカウントでログインしました！");
             } catch (error) {
                 console.error("Google Login Error:", error);
-                // Fallback to anonymous auth if popup fails or is disabled in preview iframe
                 try {
                     await signInAnonymously(auth);
                     showToast("ログイン（ゲスト認証）しました");
                 } catch (anonErr) {
-                    alert("ログイン処理に失敗しました: " + error.message);
+                    alert("ログイン処理に失敗しました。Firebase設定（API Keyや認証）を確認してください。");
                 }
             }
         });
 
         // Logout Action
         logoutBtn.addEventListener('click', async () => {
+            if (!auth) return;
             try {
                 await signOut(auth);
                 showToast("ログアウトしました");
